@@ -16,27 +16,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { McpServer } from "@modelcontextprotocol/server";
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { registerResources } from "./resources/enterpriseResources.js";
-import { registerTools } from "./tools/enterpriseTools.js";
+import { z } from "zod";
 
-const server = new McpServer({
-  name: "mcp-enterprise-data-server",
-  version: "1.0.0",
+export const CustomerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  tier: z.enum(["Standard", "Enterprise"]),
+  status: z.enum(["Active", "Suspended"]),
 });
 
-// Register feature modules
-registerResources(server);
-registerTools(server);
+export type Customer = z.infer<typeof CustomerSchema>;
 
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("MCP Enterprise Data Server running on stdio transport.");
-}
-
-main().catch((error) => {
-  console.error("Fatal startup error:", error);
-  process.exit(1);
-});
+export const enterpriseDataStore: Customer[] = [
+  { id: "CUST-001", name: "Acme Corp", tier: "Enterprise", status: "Active" },
+  { id: "CUST-002", name: "Stark Tech", tier: "Enterprise", status: "Active" },
+  { id: "CUST-003", name: "Wayne Ent", tier: "Standard", status: "Suspended" },
+];
