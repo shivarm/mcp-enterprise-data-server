@@ -17,56 +17,53 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/server";
-import { enterpriseData, getAccountOverview } from "../utils/enterpriseData.js";
+import { ResourceTemplate } from "@modelcontextprotocol/server";
+import { enterpriseDataStore } from "../data/enterpriseData.js";
 
-export function registerEnterpriseResources(server: McpServer) {
+export function registerResources(server: McpServer) {
+  // Static Resource
   server.registerResource(
-    "company-overview",
-    "enterprise://company/overview",
+    "enterprise-customers",
+    "enterprise://customers",
     {
-      title: "Company overview",
+      description: "Enterprise Customers List",
       mimeType: "application/json",
     },
-    async () => ({
+    async (uri) => ({
       contents: [
         {
-          uri: "enterprise://company/overview",
+          uri: uri.href,
+          text: JSON.stringify(enterpriseDataStore, null, 2),
           mimeType: "application/json",
-          text: JSON.stringify(getAccountOverview(), null, 2),
         },
       ],
     }),
   );
 
+  // Dynamic Resource
   server.registerResource(
-    "customer-directory",
-    "enterprise://customers",
+    "customer-by-id",
+    new ResourceTemplate("enterprise://customers/{id}", { list: undefined }),
     {
-      title: "Customer directory",
+      description: "Customer By ID",
       mimeType: "application/json",
     },
-    async () => ({
-      contents: [
-        {
-          uri: "enterprise://customers",
-          mimeType: "application/json",
-          text: JSON.stringify(
-            enterpriseData.customers.map(
-              ({ id, name, tier, region, industry, active, healthScore }) => ({
-                id,
-                name,
-                tier,
-                region,
-                industry,
-                active,
-                healthScore,
-              }),
-            ),
-            null,
-            2,
-          ),
-        },
-      ],
-    }),
+    async (uri, { id }) => {
+      const customer = enterpriseDataStore.find((c) => c.id === id);
+
+      if (!customer) {
+        throw new Error(`Customer ${id} not found.`);
+      }
+
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(customer, null, 2),
+            mimeType: "application/json",
+          },
+        ],
+      };
+    },
   );
 }
