@@ -27,7 +27,52 @@
 
 Ensure you have the following installed on your system:
 
-- **Node.js**: `v22.x` or higher (recommended: Node 22+)
+- **Node.js**: `v24.x` or higher
 - **npm**: `v11.x` or higher
 
 ---
+
+## Quick Start
+
+```shell
+# Install dependencies
+npm install
+
+# Build TypeScript output
+npm run build
+
+# Start server (Listens on http://127.0.0.1:3000/mcp)
+npm run start
+```
+
+## Testing (CLI Mode)
+
+```shell
+# List all registered tools
+npx @modelcontextprotocol/inspector --cli --server-url http://127.0.0.1:3000/mcp --method tools/list
+
+# Test searching customer records
+npx @modelcontextprotocol/inspector --cli --server-url http://127.0.0.1:3000/mcp --method tools/call --tool-name search_customers --tool-arg query=retail
+
+# Test retrieving customer details
+npx @modelcontextprotocol/inspector --cli --server-url http://127.0.0.1:3000/mcp --method tools/call --tool-name get_customer_detail --tool-arg customerId=CUST-1002
+```
+
+## Contributing
+
+Contributions to **mcp-enterprise-data-server** are managed on [GitHub.com](https://github.com/shivarm/mcp-enterprise-data-server/)
+
+* [Raise an issue](https://github.com/shivarm/mcp-enterprise-data-server/issues)
+* [Feature request](https://github.com/shivarm/mcp-enterprise-data-server/issues)
+* [Code submission](https://github.com/shivarm/mcp-enterprise-data-server/pulls)
+
+Contributions are most welcome !
+
+
+Consider giving the project a [star](https://github.com/shivarm/mcp-enterprise-data-server/stargazers) on
+[GitHub](https://github.com/shivarm/mcp-enterprise-data-server/) if you find it useful.
+
+
+## License
+
+[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)
