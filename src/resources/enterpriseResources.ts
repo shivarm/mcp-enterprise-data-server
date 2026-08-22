@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
+import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import {
   enterpriseData,
   findCustomerById,
@@ -40,7 +40,7 @@ export function registerResources(server: McpServer) {
           text: JSON.stringify(getAccountOverview(), null, 2),
         },
       ],
-    })
+    }),
   );
 
   // 2. Static Resource: Raw Enterprise Snapshot
@@ -59,13 +59,15 @@ export function registerResources(server: McpServer) {
           text: JSON.stringify(enterpriseData, null, 2),
         },
       ],
-    })
+    }),
   );
 
   // 3. Dynamic Resource: Customer Profile by URI Parameter
   server.registerResource(
     "customer_detail",
-    new ResourceTemplate("enterprise://customers/{customerId}", { list: undefined }),
+    new ResourceTemplate("enterprise://customers/{customerId}", {
+      list: undefined,
+    }),
     {
       title: "Customer Profile",
       description: "Fetch customer details by URI path.",
@@ -94,6 +96,6 @@ export function registerResources(server: McpServer) {
           },
         ],
       };
-    }
+    },
   );
 }

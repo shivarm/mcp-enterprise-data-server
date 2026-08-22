@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   enterpriseData,
@@ -45,14 +45,15 @@ export function registerTools(server: McpServer) {
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       };
-    }
+    },
   );
 
   // 2. Search Customers Tool
   server.registerTool(
     "search_customers",
     {
-      description: "Search customer directory by name, ID, region, or industry.",
+      description:
+        "Search customer directory by name, ID, region, or industry.",
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(10).default(5),
@@ -65,7 +66,7 @@ export function registerTools(server: McpServer) {
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       };
-    }
+    },
   );
 
   // 3. Get Customer Detail Tool
@@ -82,7 +83,9 @@ export function registerTools(server: McpServer) {
 
       if (!customer) {
         return {
-          content: [{ type: "text", text: `Customer ${customerId} not found.` }],
+          content: [
+            { type: "text", text: `Customer ${customerId} not found.` },
+          ],
           isError: true,
         };
       }
@@ -93,7 +96,7 @@ export function registerTools(server: McpServer) {
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       };
-    }
+    },
   );
 
   // 4. Get Customer Orders Tool
@@ -119,6 +122,6 @@ export function registerTools(server: McpServer) {
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       };
-    }
+    },
   );
 }
