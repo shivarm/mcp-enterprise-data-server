@@ -16,43 +16,74 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import type { McpServer } from "@modelcontextprotocol/server";
-import { ResourceTemplate } from "@modelcontextprotocol/server";
-import { enterpriseDataStore } from "../data/enterpriseData.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
+import {
+  enterpriseData,
+  findCustomerById,
+  getAccountOverview,
+} from "../utils/enterpriseData.js";
 
 export function registerResources(server: McpServer) {
-  // Static Resource
+  // 1. Static Resource: Company KPI Overview
   server.registerResource(
-    "enterprise-customers",
-    "enterprise://customers",
+    "company_overview",
+    "enterprise://overview",
     {
-      description: "Enterprise Customers List",
+      title: "Company Overview",
+      description: "Retrieve enterprise account KPIs and summary metrics.",
       mimeType: "application/json",
     },
     async (uri) => ({
       contents: [
         {
           uri: uri.href,
-          text: JSON.stringify(enterpriseDataStore, null, 2),
-          mimeType: "application/json",
+          text: JSON.stringify(getAccountOverview(), null, 2),
         },
       ],
-    }),
+    })
   );
 
-  // Dynamic Resource
+  // 2. Static Resource: Raw Enterprise Snapshot
   server.registerResource(
-    "customer-by-id",
-    new ResourceTemplate("enterprise://customers/{id}", { list: undefined }),
+    "enterprise_snapshot",
+    "enterprise://snapshot",
     {
-      description: "Customer By ID",
+      title: "Enterprise Snapshot",
+      description: "Full raw dataset snapshot.",
       mimeType: "application/json",
     },
-    async (uri, { id }) => {
-      const customer = enterpriseDataStore.find((c) => c.id === id);
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          text: JSON.stringify(enterpriseData, null, 2),
+        },
+      ],
+    })
+  );
+
+  // 3. Dynamic Resource: Customer Profile by URI Parameter
+  server.registerResource(
+    "customer_detail",
+    new ResourceTemplate("enterprise://customers/{customerId}", { list: undefined }),
+    {
+      title: "Customer Profile",
+      description: "Fetch customer details by URI path.",
+      mimeType: "application/json",
+    },
+    async (uri, params) => {
+      // Extract raw param and resolve arrays/undefined down to a strict string
+      const rawId = params.customerId;
+      const targetId = (Array.isArray(rawId) ? rawId[0] : rawId) || "";
+
+      if (!targetId) {
+        throw new Error("Customer ID is required in URI path.");
+      }
+
+      const customer = findCustomerById(targetId);
 
       if (!customer) {
-        throw new Error(`Customer ${id} not found.`);
+        throw new Error(`Customer ${targetId} not found.`);
       }
 
       return {
@@ -60,10 +91,9 @@ export function registerResources(server: McpServer) {
           {
             uri: uri.href,
             text: JSON.stringify(customer, null, 2),
-            mimeType: "application/json",
           },
         ],
       };
-    },
+    }
   );
 }
