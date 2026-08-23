@@ -60,14 +60,13 @@ npx @modelcontextprotocol/inspector --cli --server-url http://127.0.0.1:3000/mcp
 
 ## Contributing
 
-Contributions to **mcp-enterprise-data-server** are managed on [GitHub.com](https://github.com/shivarm/mcp-enterprise-data-server/)
+Contributions to **mcp-enterprise-data-server** are managed on [GitHub.com](CONTRIBUTING.md)
 
 * [Raise an issue](https://github.com/shivarm/mcp-enterprise-data-server/issues)
 * [Feature request](https://github.com/shivarm/mcp-enterprise-data-server/issues)
 * [Code submission](https://github.com/shivarm/mcp-enterprise-data-server/pulls)
 
 Contributions are most welcome !
-
 
 Consider giving the project a [star](https://github.com/shivarm/mcp-enterprise-data-server/stargazers) on
 [GitHub](https://github.com/shivarm/mcp-enterprise-data-server/) if you find it useful.
