@@ -54,13 +54,8 @@ async function main(): Promise<void> {
     ...(allowedHosts ? { allowedHosts } : {}),
   });
 
-  /**
-   * TODO: PRODUCTION
-    Currently using app.all() for convenience to let the MCP SDK handle SSE routing.
-    For production deployments, restrict HTTP verbs and separate GET /mcp/sse from POST /mcp/messages.
-    Automatically return 405 (Method Not Allowed) for unsupported verbs (PUT, DELETE)
-   */
-  app.all("/mcp", async (req, res) => {
+  // GET /mcp — Handles initial SSE connection stream
+  app.get("/mcp", async (req, res) => {
     const rawSessionId = req.headers["mcp-session-id"];
     const sessionId = Array.isArray(rawSessionId)
       ? rawSessionId[0]
@@ -83,6 +78,42 @@ async function main(): Promise<void> {
     }
 
     await transport.handleRequest(req, res, req.body);
+  });
+
+  // POST /mcp — Handles incoming JSON-RPC requests
+  app.post("/mcp", async (req, res) => {
+    const rawSessionId = req.headers["mcp-session-id"];
+    const sessionId = Array.isArray(rawSessionId)
+      ? rawSessionId[0]
+      : rawSessionId;
+
+    // POST messages must belong to an already initialized SSE session
+    if (!sessionId || !transports.has(sessionId)) {
+      res.status(400).json({
+        error:
+          "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
+      });
+      return;
+    }
+
+    const transport = sessionId ? transports.get(sessionId) : undefined;
+
+    if (!transport) {
+      res.status(400).json({
+        error:
+          "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
+      });
+      return;
+    }
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  // Reject all unsupported HTTP verbs (PUT, DELETE, PATCH, etc.)
+  app.use("/mcp", (req, res) => {
+    res.setHeader("Allow", "GET, POST");
+    res.status(405).json({
+      error: `Method ${req.method} Not Allowed on /mcp. Use GET or POST.`,
+    });
   });
 
   const httpServer = app.listen(port, host, () => {
