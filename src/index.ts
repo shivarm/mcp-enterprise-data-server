@@ -19,8 +19,10 @@ import { randomUUID } from "node:crypto";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import { McpServer } from "@modelcontextprotocol/server";
+import { pinoHttp } from "pino-http";
 import { registerResources } from "./resources/enterpriseResources.js";
 import { registerTools } from "./tools/enterpriseTools.js";
+import { logger } from "./utils/logger.js";
 
 function buildServer(): McpServer {
   const server = new McpServer({
@@ -54,6 +56,8 @@ async function main(): Promise<void> {
     ...(allowedHosts ? { allowedHosts } : {}),
   });
 
+  app.use(pinoHttp({ logger }));
+
   // GET /mcp — Handles initial SSE connection stream
   app.get("/mcp", async (req, res) => {
     const rawSessionId = req.headers["mcp-session-id"];
@@ -66,9 +70,11 @@ async function main(): Promise<void> {
       transport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
+          logger.info({ sessionId: id }, "MCP Session initialized");
           transports.set(id, transport as NodeStreamableHTTPServerTransport);
         },
         onsessionclosed: (id) => {
+          logger.info({ sessionId: id }, "MCP Session closed");
           transports.delete(id);
         },
       });
@@ -87,18 +93,13 @@ async function main(): Promise<void> {
       ? rawSessionId[0]
       : rawSessionId;
 
-    // POST messages must belong to an already initialized SSE session
-    if (!sessionId || !transports.has(sessionId)) {
-      res.status(400).json({
-        error:
-          "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
-      });
-      return;
-    }
-
     const transport = sessionId ? transports.get(sessionId) : undefined;
 
     if (!transport) {
+      logger.warn(
+        { sessionId },
+        "Rejected POST request: Invalid or missing session ID",
+      );
       res.status(400).json({
         error:
           "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
@@ -110,6 +111,7 @@ async function main(): Promise<void> {
 
   // Reject all unsupported HTTP verbs (PUT, DELETE, PATCH, etc.)
   app.use("/mcp", (req, res) => {
+    logger.warn({ method: req.method }, "Method not allowed on /mcp");
     res.setHeader("Allow", "GET, POST");
     res.status(405).json({
       error: `Method ${req.method} Not Allowed on /mcp. Use GET or POST.`,
@@ -117,22 +119,24 @@ async function main(): Promise<void> {
   });
 
   const httpServer = app.listen(port, host, () => {
-    console.error(
+    logger.info(
       `MCP Enterprise Data Server listening at http://${host}:${port}/mcp`,
     );
   });
 
   process.on("SIGINT", async () => {
+    logger.info("Shutting down MCP server gracefully...");
     httpServer.close();
     for (const [id, transport] of transports) {
       await transport.close();
       transports.delete(id);
     }
+    logger.info("Server closed successfully.");
     process.exit(0);
   });
 }
 
 main().catch((error) => {
-  console.error("Fatal startup error:", error);
+  logger.fatal({ err: error }, "Fatal startup error");
   process.exit(1);
 });
