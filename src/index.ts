@@ -23,6 +23,7 @@ import { pinoHttp } from "pino-http";
 import { registerResources } from "./resources/enterpriseResources.js";
 import { registerTools } from "./tools/enterpriseTools.js";
 import { logger } from "./utils/logger.js";
+import { SessionManager } from "./utils/sessionManager.js";
 
 function buildServer(): McpServer {
   const server = new McpServer({
@@ -51,6 +52,9 @@ async function main(): Promise<void> {
 
   const transports = new Map<string, NodeStreamableHTTPServerTransport>();
 
+  const sessionManager = new SessionManager();
+  sessionManager.startCleanupTask();
+
   const app = createMcpExpressApp({
     host,
     ...(allowedHosts ? { allowedHosts } : {}),
@@ -59,54 +63,70 @@ async function main(): Promise<void> {
   app.use(pinoHttp({ logger }));
 
   // GET /mcp — Handles initial SSE connection stream
-  app.get("/mcp", async (req, res) => {
-    const rawSessionId = req.headers["mcp-session-id"];
-    const sessionId = Array.isArray(rawSessionId)
-      ? rawSessionId[0]
-      : rawSessionId;
-    let transport = sessionId ? transports.get(sessionId) : undefined;
+  app.get("/mcp", async (req, res, next) => {
+    try {
+      const rawSessionId = req.headers["mcp-session-id"];
+      const sessionId = Array.isArray(rawSessionId)
+        ? rawSessionId[0]
+        : rawSessionId;
 
-    if (!transport) {
-      transport = new NodeStreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (id) => {
-          logger.info({ sessionId: id }, "MCP Session initialized");
-          transports.set(id, transport as NodeStreamableHTTPServerTransport);
-        },
-        onsessionclosed: (id) => {
-          logger.info({ sessionId: id }, "MCP Session closed");
-          transports.delete(id);
-        },
-      });
+      let session = sessionId
+        ? sessionManager.getSession(sessionId)
+        : undefined;
 
-      const server = buildServer();
-      await server.connect(transport);
+      if (!session) {
+        const transport = new NodeStreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (id) => {
+            logger.info({ sessionId: id }, "MCP Session initialized");
+            sessionManager.registerSession(id, transport);
+          },
+          onsessionclosed: (id) => {
+            logger.info({ sessionId: id }, "MCP Session closed");
+            sessionManager.removeSession(id);
+          },
+        });
+
+        const server = buildServer();
+        await server.connect(transport);
+
+        session = { transport, lastActivity: Date.now() };
+      }
+
+      await session.transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      next(err);
     }
-
-    await transport.handleRequest(req, res, req.body);
   });
 
   // POST /mcp — Handles incoming JSON-RPC requests
-  app.post("/mcp", async (req, res) => {
-    const rawSessionId = req.headers["mcp-session-id"];
-    const sessionId = Array.isArray(rawSessionId)
-      ? rawSessionId[0]
-      : rawSessionId;
+  app.post("/mcp", async (req, res, next) => {
+    try {
+      const rawSessionId = req.headers["mcp-session-id"];
+      const sessionId = Array.isArray(rawSessionId)
+        ? rawSessionId[0]
+        : rawSessionId;
 
-    const transport = sessionId ? transports.get(sessionId) : undefined;
+      const session = sessionId
+        ? sessionManager.getSession(sessionId)
+        : undefined;
 
-    if (!transport) {
-      logger.warn(
-        { sessionId },
-        "Rejected POST request: Invalid or missing session ID",
-      );
-      res.status(400).json({
-        error:
-          "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
-      });
-      return;
+      if (!session) {
+        logger.warn(
+          { sessionId },
+          "Rejected POST request: Missing/Invalid session ID",
+        );
+        res.status(400).json({
+          error:
+            "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
+        });
+        return;
+      }
+
+      await session.transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      next(err);
     }
-    await transport.handleRequest(req, res, req.body);
   });
 
   // Reject all unsupported HTTP verbs (PUT, DELETE, PATCH, etc.)
@@ -125,8 +145,9 @@ async function main(): Promise<void> {
   });
 
   process.on("SIGINT", async () => {
-    logger.info("Shutting down MCP server gracefully...");
+    await sessionManager.stopAll();
     httpServer.close();
+    logger.info("Shutting down MCP server gracefully...");
     for (const [id, transport] of transports) {
       await transport.close();
       transports.delete(id);
