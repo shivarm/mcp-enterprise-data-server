@@ -112,15 +112,10 @@ async function main(): Promise<void> {
         : undefined;
 
       if (!session) {
-        logger.warn(
-          { sessionId },
-          "Rejected POST request: Missing/Invalid session ID",
-        );
-        res.status(400).json({
+        return res.status(400).json({
           error:
             "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
         });
-        return;
       }
 
       await session.transport.handleRequest(req, res, req.body);
