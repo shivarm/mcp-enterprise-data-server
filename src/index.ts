@@ -24,6 +24,7 @@ import { registerResources } from "./resources/enterpriseResources.js";
 import { registerTools } from "./tools/enterpriseTools.js";
 import { logger } from "./utils/logger.js";
 import { SessionManager } from "./utils/sessionManager.js";
+import isInitializeRequest from "./utils/utils.js";
 
 function buildServer(): McpServer {
   const server = new McpServer({
@@ -70,27 +71,15 @@ async function main(): Promise<void> {
         ? rawSessionId[0]
         : rawSessionId;
 
-      let session = sessionId
+      const session = sessionId
         ? sessionManager.getSession(sessionId)
         : undefined;
 
       if (!session) {
-        const transport = new NodeStreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (id) => {
-            logger.info({ sessionId: id }, "MCP Session initialized");
-            sessionManager.registerSession(id, transport);
-          },
-          onsessionclosed: (id) => {
-            logger.info({ sessionId: id }, "MCP Session closed");
-            sessionManager.removeSession(id);
-          },
+        return res.status(400).json({
+          error:
+            "Missing or invalid 'mcp-session-id' header. Initialize a session with POST /mcp first.",
         });
-
-        const server = buildServer();
-        await server.connect(transport);
-
-        session = { transport, lastActivity: Date.now() };
       }
 
       await session.transport.handleRequest(req, res, req.body);
@@ -107,15 +96,40 @@ async function main(): Promise<void> {
         ? rawSessionId[0]
         : rawSessionId;
 
-      const session = sessionId
+      let session = sessionId
         ? sessionManager.getSession(sessionId)
         : undefined;
 
       if (!session) {
-        return res.status(400).json({
-          error:
-            "Missing or invalid 'mcp-session-id' header. Initialize session via GET /mcp first.",
+        if (sessionId) {
+          return res.status(404).json({
+            error:
+              "Session not found or expired. Start a new session with an 'initialize' request.",
+          });
+        }
+
+        if (!isInitializeRequest(req.body)) {
+          return res.status(400).json({
+            error: "No active session. Send an 'initialize' request first.",
+          });
+        }
+
+        const transport = new NodeStreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (id) => {
+            logger.info({ sessionId: id }, "MCP Session initialized");
+            sessionManager.registerSession(id, transport);
+          },
+          onsessionclosed: (id) => {
+            logger.info({ sessionId: id }, "MCP Session closed");
+            sessionManager.removeSession(id);
+          },
         });
+
+        const server = buildServer();
+        await server.connect(transport);
+
+        session = { transport, lastActivity: Date.now() };
       }
 
       await session.transport.handleRequest(req, res, req.body);
