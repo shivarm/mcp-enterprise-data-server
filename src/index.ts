@@ -63,6 +63,8 @@ async function main(): Promise<void> {
 
   app.use(pinoHttp({ logger }));
 
+  app.get("/", (req, res) => res.status(200).send("ok"));
+
   // GET /mcp — Handles initial SSE connection stream
   app.get("/mcp", async (req, res, next) => {
     try {
